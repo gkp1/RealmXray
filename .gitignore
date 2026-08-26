@@ -12,7 +12,13 @@
 dpsLogs/
 error/
 .gradle/
-gradle/
+# Keep gradle/wrapper/ (gradle-wrapper.jar + .properties) versioned -- required
+# for ./gradlew and gradlew.bat to work without a local Gradle install.
+gradle/*
+!gradle/wrapper/
+gradle/wrapper/*
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 
 # Package Files #
 .idea
