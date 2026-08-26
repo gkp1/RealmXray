@@ -19,6 +19,7 @@ public class PacketConstructor {
     private final PacketProcessor packetProcessor;
     private final ROTMGPacketConstructor rotmgConst;
     private final TickAligner tickAligner;
+    private final boolean incoming;
     private boolean firstNonLargePacket;
 
     /**
@@ -27,9 +28,10 @@ public class PacketConstructor {
      * @param pp Parent class to send constructed packets back too.
      * @param r  The cipher used to decode packets.
      */
-    public PacketConstructor(PacketProcessor pp, RC4 r) {
+    public PacketConstructor(PacketProcessor pp, RC4 r, boolean incoming) {
         packetProcessor = pp;
         rc4Cipher = r;
+        this.incoming = incoming;
         rotmgConst = new ROTMGPacketConstructor(this);
         tickAligner = new TickAligner(rc4Cipher);
     }
@@ -65,7 +67,7 @@ public class PacketConstructor {
 
             if (sync) {
                 rc4Cipher.decrypt(5, encryptedData); // encryptedData is decrypted in this method
-                packetProcessor.processPackets(type, size, encryptedData);
+                packetProcessor.processPackets(type, size, encryptedData, incoming);
             }
         } catch (Exception e) {
             e.printStackTrace();

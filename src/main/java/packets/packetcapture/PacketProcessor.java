@@ -6,6 +6,7 @@ import packets.incoming.ip.IpAddress;
 import packets.packetcapture.encryption.RC4;
 import packets.packetcapture.encryption.RotMGRC4Keys;
 import packets.packetcapture.logger.PacketLogger;
+import packets.packetcapture.logger.FullPacketLogger;
 import packets.packetcapture.pconstructor.PacketConstructor;
 import packets.packetcapture.register.Register;
 import packets.packetcapture.sniff.PProcessor;
@@ -36,8 +37,8 @@ public class PacketProcessor extends Thread implements PProcessor {
      */
     public PacketProcessor() {
         sniffer = new Sniffer(this);
-        incomingPacketConstructor = new PacketConstructor(this, new RC4(RotMGRC4Keys.INCOMING_STRING));
-        outgoingPacketConstructor = new PacketConstructor(this, new RC4(RotMGRC4Keys.OUTGOING_STRING));
+        incomingPacketConstructor = new PacketConstructor(this, new RC4(RotMGRC4Keys.INCOMING_STRING), true);
+        outgoingPacketConstructor = new PacketConstructor(this, new RC4(RotMGRC4Keys.OUTGOING_STRING), false);
         logger = new PacketLogger();
         srcAddr = new byte[4];
     }
@@ -121,27 +122,36 @@ public class PacketProcessor extends Thread implements PProcessor {
      * @param size size of the packet.
      * @param data Constructed packet data.
      */
-    public void processPackets(int type, int size, ByteBuffer data) {
+    public void processPackets(int type, int size, ByteBuffer data, boolean incoming) {
+        byte[] raw = data.array();
+
         if (!PacketType.containsKey(type)) {
-            System.err.println("Unknown packet type:" + type + " Data:" + Arrays.toString(data.array()));
+            System.err.println("Unknown packet type:" + type + " Data:" + Arrays.toString(raw));
+            FullPacketLogger.INSTANCE.onFrame(incoming, type, size, raw, null);
             return;
         }
+
         logger.addPacket(type, size);
         Packet packetType = PacketType.getPacket(type).factory();
-        packetType.setData(data.array());
+        packetType.setData(raw);
         BufferReader pData = new BufferReader(data);
 
+        Packet deserialized = null;
         try {
             packetType.deserialize(pData);
             if (!pData.isBufferFullyParsed()) {
                 pData.printError(packetType);
             }
+            deserialized = packetType;
         } catch (Exception e) {
             Util.printLogs("Buffer exploded: " + pData.getIndex() + "/" + pData.size());
-            debugPackets(type, data.array());
-            return;
+            debugPackets(type, raw);
         }
-        Register.INSTANCE.emitPacketLogs(packetType);
+
+        FullPacketLogger.INSTANCE.onFrame(incoming, type, size, raw, deserialized);
+        if (deserialized != null) {
+            Register.INSTANCE.emitPacketLogs(packetType);
+        }
     }
 
     /**
