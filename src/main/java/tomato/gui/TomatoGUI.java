@@ -16,6 +16,7 @@ import tomato.gui.dps.DpsGUI;
 import tomato.gui.keypop.KeypopGUI;
 import tomato.gui.maingui.*;
 import tomato.gui.myinfo.MyInfoGUI;
+import tomato.gui.packetlog.PacketLogGUI;
 import tomato.gui.quest.QuestGUI;
 import tomato.gui.security.ParsePanelGUI;
 import tomato.gui.security.SecurityGUI;
@@ -42,6 +43,7 @@ public class TomatoGUI {
     private static QuestGUI questPanel;
     private static MyInfoGUI myDmg;
     private static StatisticsGUI statistics;
+    private static PacketLogGUI packetLogPanel;
     private JMenuBar jMenuBar;
     private JPanel mainPanel, dpsPanel;
     private TomatoMenuBar menuBar;
@@ -81,6 +83,9 @@ public class TomatoGUI {
 
         dpsPanel = new DpsGUI(data);
         tabbedPane.addTab("DPS Logger", dpsPanel);
+
+        packetLogPanel = new PacketLogGUI();
+        tabbedPane.addTab("Packet Log", packetLogPanel);
 
         center =
             GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
