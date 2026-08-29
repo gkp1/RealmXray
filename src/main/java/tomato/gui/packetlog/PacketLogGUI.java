@@ -289,8 +289,9 @@ public class PacketLogGUI extends JPanel {
         sb.append("Type: ").append(entry.typeName).append(" (").append(entry.typeId).append(")\n");
         sb.append("Size: ").append(entry.size).append(" bytes\n");
         sb.append("Parsed: ").append(entry.deserialized).append("\n\n");
-        if (entry.deserialized && !entry.json.isEmpty()) {
-            sb.append(entry.json);
+        String json = entry.getJson();
+        if (entry.deserialized && !json.isEmpty()) {
+            sb.append(json);
         } else if (entry.raw != null) {
             sb.append("Raw bytes: ").append(Arrays.toString(entry.raw));
         }
