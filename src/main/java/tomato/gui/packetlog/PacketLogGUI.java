@@ -6,10 +6,16 @@ import packets.packetcapture.logger.PacketLogEntry;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * "Packet Log" tab: shows every frame reaching {@link packets.packetcapture.PacketProcessor}
@@ -30,6 +36,7 @@ public class PacketLogGUI extends JPanel {
     private final JTable table;
     private final JTextArea detailArea;
     private final JTextField filterField;
+    private final JTextField excludeField;
     private final JComboBox<String> directionFilter;
     private final JCheckBox errorsOnlyCheckbox;
     private final JCheckBox pauseCheckbox;
@@ -59,6 +66,17 @@ public class PacketLogGUI extends JPanel {
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) showDetailForSelection();
         });
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                maybeShowContextMenu(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                maybeShowContextMenu(e);
+            }
+        });
 
         detailArea = new JTextArea();
         detailArea.setEditable(false);
@@ -66,6 +84,7 @@ public class PacketLogGUI extends JPanel {
         detailArea.setWrapStyleWord(true);
 
         filterField = new JTextField(14);
+        excludeField = new JTextField(14);
         directionFilter = new JComboBox<>(new String[]{"All", "Incoming", "Outgoing"});
         errorsOnlyCheckbox = new JCheckBox("Only unparsed/unknown");
         pauseCheckbox = new JCheckBox("Pause");
@@ -89,6 +108,14 @@ public class PacketLogGUI extends JPanel {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
         panel.add(new JLabel("Type filter:"));
         panel.add(filterField);
+        panel.add(new JLabel("Exclude:"));
+        panel.add(excludeField);
+        JButton clearExcludeButton = new JButton("Clear excludes");
+        clearExcludeButton.addActionListener(e -> {
+            excludeField.setText("");
+            refreshTable();
+        });
+        panel.add(clearExcludeButton);
         panel.add(new JLabel("Direction:"));
         panel.add(directionFilter);
         panel.add(errorsOnlyCheckbox);
@@ -168,6 +195,7 @@ public class PacketLogGUI extends JPanel {
         lastEntries = entries;
 
         String typeFilter = filterField.getText().trim().toLowerCase();
+        List<String> excludeTerms = parseExcludeTerms();
         String direction = (String) directionFilter.getSelectedItem();
         boolean errorsOnly = errorsOnlyCheckbox.isSelected();
 
@@ -179,6 +207,7 @@ public class PacketLogGUI extends JPanel {
 
         for (PacketLogEntry entry : entries) {
             if (!typeFilter.isEmpty() && !entry.typeName.toLowerCase().contains(typeFilter)) continue;
+            if (isExcluded(entry, excludeTerms)) continue;
             if ("Incoming".equals(direction) && !entry.incoming) continue;
             if ("Outgoing".equals(direction) && entry.incoming) continue;
             if (errorsOnly && entry.deserialized) continue;
@@ -229,12 +258,14 @@ public class PacketLogGUI extends JPanel {
     private PacketLogEntry findEntryForVisibleRow(int visibleRow) {
         if (lastEntries == null) return null;
         String typeFilter = filterField.getText().trim().toLowerCase();
+        List<String> excludeTerms = parseExcludeTerms();
         String direction = (String) directionFilter.getSelectedItem();
         boolean errorsOnly = errorsOnlyCheckbox.isSelected();
 
         int count = -1;
         for (PacketLogEntry entry : lastEntries) {
             if (!typeFilter.isEmpty() && !entry.typeName.toLowerCase().contains(typeFilter)) continue;
+            if (isExcluded(entry, excludeTerms)) continue;
             if ("Incoming".equals(direction) && !entry.incoming) continue;
             if ("Outgoing".equals(direction) && entry.incoming) continue;
             if (errorsOnly && entry.deserialized) continue;
@@ -242,5 +273,50 @@ public class PacketLogGUI extends JPanel {
             if (count == visibleRow) return entry;
         }
         return null;
+    }
+
+    /**
+     * Comma-separated substrings from the Exclude field, lowercased and trimmed.
+     */
+    private List<String> parseExcludeTerms() {
+        String raw = excludeField.getText();
+        if (raw == null || raw.trim().isEmpty()) return java.util.Collections.emptyList();
+        return Arrays.stream(raw.split(","))
+            .map(String::trim)
+            .map(String::toLowerCase)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toList());
+    }
+
+    private boolean isExcluded(PacketLogEntry entry, List<String> excludeTerms) {
+        if (excludeTerms.isEmpty()) return false;
+        String typeName = entry.typeName.toLowerCase();
+        for (String term : excludeTerms) {
+            if (typeName.contains(term)) return true;
+        }
+        return false;
+    }
+
+    private void maybeShowContextMenu(MouseEvent e) {
+        if (!e.isPopupTrigger()) return;
+        int row = table.rowAtPoint(e.getPoint());
+        if (row < 0) return;
+        table.setRowSelectionInterval(row, row);
+
+        PacketLogEntry entry = findEntryForVisibleRow(row);
+        if (entry == null) return;
+
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem hideItem = new JMenuItem("Hide \"" + entry.typeName + "\"");
+        hideItem.addActionListener(a -> addExcludeTerm(entry.typeName));
+        menu.add(hideItem);
+        menu.show(table, e.getX(), e.getY());
+    }
+
+    private void addExcludeTerm(String typeName) {
+        Set<String> terms = new LinkedHashSet<>(parseExcludeTerms());
+        terms.add(typeName.toLowerCase());
+        excludeField.setText(String.join(", ", terms));
+        refreshTable();
     }
 }
