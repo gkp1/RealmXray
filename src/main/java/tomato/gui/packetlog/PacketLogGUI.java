@@ -4,16 +4,20 @@ import packets.packetcapture.logger.FullPacketLogger;
 import packets.packetcapture.logger.PacketLogEntry;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,13 +31,17 @@ public class PacketLogGUI extends JPanel {
     private static final String[] COLUMN_NAMES = {
         "Time", "Dir", "Type Id", "Type Name", "Size", "Parsed"
     };
+    private static final int TYPE_NAME_COLUMN = 3;
     private static final int MAX_VISIBLE_ROWS = 1000;
     private static final int POLL_INTERVAL_MS = 500;
+    private static final int SCROLL_BOTTOM_SLACK_PX = 6;
 
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS");
+    private final Map<String, Color> typeColorCache = new HashMap<>();
 
     private final DefaultTableModel tableModel;
     private final JTable table;
+    private final JScrollPane tableScrollPane;
     private final JTextArea detailArea;
     private final JTextField filterField;
     private final JTextField excludeField;
@@ -43,7 +51,9 @@ public class PacketLogGUI extends JPanel {
     private final JLabel countLabel;
     private final JLabel fileLabel;
 
-    private List<PacketLogEntry> lastEntries;
+    // Entries currently shown in the table, in model-row order (i.e. index == model row index,
+    // not view row index — use table.convertRowIndexToModel() when reading from a view row).
+    private List<PacketLogEntry> visibleEntries = new ArrayList<>();
     private Timer pollTimer;
     private File outputFile;
 
@@ -57,12 +67,20 @@ public class PacketLogGUI extends JPanel {
             }
         };
         table = new JTable(tableModel);
-        table.setAutoCreateRowSorter(false);
+        table.setAutoCreateRowSorter(true);
         table.getTableHeader().setReorderingAllowed(false);
+        table.setFillsViewportHeight(true);
         int[] widths = {90, 40, 60, 220, 60, 60};
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
+
+        TypeColorRenderer coloredRenderer = new TypeColorRenderer();
+        table.setDefaultRenderer(Object.class, coloredRenderer);
+        table.setDefaultRenderer(String.class, coloredRenderer);
+        table.setDefaultRenderer(Integer.class, coloredRenderer);
+        table.setDefaultRenderer(Number.class, coloredRenderer);
+
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) showDetailForSelection();
         });
@@ -92,9 +110,11 @@ public class PacketLogGUI extends JPanel {
         fileLabel = new JLabel("Not saving to file");
 
         add(buildTopPanel(), BorderLayout.NORTH);
+        tableScrollPane = new JScrollPane(table);
+        tableScrollPane.getVerticalScrollBar().setUnitIncrement(24);
         JSplitPane splitPane = new JSplitPane(
             JSplitPane.VERTICAL_SPLIT,
-            new JScrollPane(table),
+            tableScrollPane,
             new JScrollPane(detailArea)
         );
         splitPane.setResizeWeight(0.65);
@@ -192,14 +212,29 @@ public class PacketLogGUI extends JPanel {
         if (pauseCheckbox.isSelected()) return;
 
         List<PacketLogEntry> entries = FullPacketLogger.INSTANCE.getRecent(MAX_VISIBLE_ROWS);
-        lastEntries = entries;
 
         String typeFilter = filterField.getText().trim().toLowerCase();
         List<String> excludeTerms = parseExcludeTerms();
         String direction = (String) directionFilter.getSelectedItem();
         boolean errorsOnly = errorsOnlyCheckbox.isSelected();
 
-        int previouslySelected = table.getSelectedRow();
+        // Remember what's selected (by identity, survives re-sorting/filtering) and whether the
+        // viewport was pinned to the bottom, so a live-refresh doesn't yank the user's scroll
+        // position or selection out from under them.
+        PacketLogEntry previouslySelectedEntry = null;
+        int viewRow = table.getSelectedRow();
+        if (viewRow >= 0) {
+            int modelRow = table.convertRowIndexToModel(viewRow);
+            if (modelRow >= 0 && modelRow < visibleEntries.size()) {
+                previouslySelectedEntry = visibleEntries.get(modelRow);
+            }
+        }
+        JScrollBar vbar = tableScrollPane.getVerticalScrollBar();
+        boolean wasAtBottom = !vbar.isVisible()
+            || vbar.getValue() + vbar.getVisibleAmount() >= vbar.getMaximum() - SCROLL_BOTTOM_SLACK_PX;
+        int savedScrollValue = vbar.getValue();
+
+        List<PacketLogEntry> newVisibleEntries = new ArrayList<>();
         tableModel.setRowCount(0);
 
         int total = FullPacketLogger.INSTANCE.size();
@@ -212,6 +247,7 @@ public class PacketLogGUI extends JPanel {
             if ("Outgoing".equals(direction) && entry.incoming) continue;
             if (errorsOnly && entry.deserialized) continue;
 
+            newVisibleEntries.add(entry);
             tableModel.addRow(new Object[]{
                 timeFormat.format(new Date(entry.timestamp)),
                 entry.incoming ? "IN" : "OUT",
@@ -221,21 +257,28 @@ public class PacketLogGUI extends JPanel {
                 entry.deserialized ? "Yes" : "No"
             });
         }
+        visibleEntries = newVisibleEntries;
 
-        if (previouslySelected >= 0 && previouslySelected < tableModel.getRowCount()) {
-            table.setRowSelectionInterval(previouslySelected, previouslySelected);
+        if (previouslySelectedEntry != null) {
+            int newModelRow = visibleEntries.indexOf(previouslySelectedEntry);
+            if (newModelRow >= 0) {
+                int newViewRow = table.convertRowIndexToView(newModelRow);
+                if (newViewRow >= 0) table.setRowSelectionInterval(newViewRow, newViewRow);
+            }
         }
+
+        SwingUtilities.invokeLater(() -> {
+            if (wasAtBottom) {
+                vbar.setValue(vbar.getMaximum());
+            } else {
+                vbar.setValue(Math.min(savedScrollValue, vbar.getMaximum()));
+            }
+        });
     }
 
     private void showDetailForSelection() {
-        int row = table.getSelectedRow();
-        if (row < 0 || lastEntries == null) {
-            detailArea.setText("");
-            return;
-        }
-
-        // Re-resolve the visible row against the filtered subset used to build the table.
-        PacketLogEntry entry = findEntryForVisibleRow(row);
+        int viewRow = table.getSelectedRow();
+        PacketLogEntry entry = entryForViewRow(viewRow);
         if (entry == null) {
             detailArea.setText("");
             return;
@@ -249,30 +292,17 @@ public class PacketLogGUI extends JPanel {
         if (entry.deserialized && !entry.json.isEmpty()) {
             sb.append(entry.json);
         } else if (entry.raw != null) {
-            sb.append("Raw bytes: ").append(java.util.Arrays.toString(entry.raw));
+            sb.append("Raw bytes: ").append(Arrays.toString(entry.raw));
         }
         detailArea.setText(sb.toString());
         detailArea.setCaretPosition(0);
     }
 
-    private PacketLogEntry findEntryForVisibleRow(int visibleRow) {
-        if (lastEntries == null) return null;
-        String typeFilter = filterField.getText().trim().toLowerCase();
-        List<String> excludeTerms = parseExcludeTerms();
-        String direction = (String) directionFilter.getSelectedItem();
-        boolean errorsOnly = errorsOnlyCheckbox.isSelected();
-
-        int count = -1;
-        for (PacketLogEntry entry : lastEntries) {
-            if (!typeFilter.isEmpty() && !entry.typeName.toLowerCase().contains(typeFilter)) continue;
-            if (isExcluded(entry, excludeTerms)) continue;
-            if ("Incoming".equals(direction) && !entry.incoming) continue;
-            if ("Outgoing".equals(direction) && entry.incoming) continue;
-            if (errorsOnly && entry.deserialized) continue;
-            count++;
-            if (count == visibleRow) return entry;
-        }
-        return null;
+    private PacketLogEntry entryForViewRow(int viewRow) {
+        if (viewRow < 0) return null;
+        int modelRow = table.convertRowIndexToModel(viewRow);
+        if (modelRow < 0 || modelRow >= visibleEntries.size()) return null;
+        return visibleEntries.get(modelRow);
     }
 
     /**
@@ -299,11 +329,11 @@ public class PacketLogGUI extends JPanel {
 
     private void maybeShowContextMenu(MouseEvent e) {
         if (!e.isPopupTrigger()) return;
-        int row = table.rowAtPoint(e.getPoint());
-        if (row < 0) return;
-        table.setRowSelectionInterval(row, row);
+        int viewRow = table.rowAtPoint(e.getPoint());
+        if (viewRow < 0) return;
+        table.setRowSelectionInterval(viewRow, viewRow);
 
-        PacketLogEntry entry = findEntryForVisibleRow(row);
+        PacketLogEntry entry = entryForViewRow(viewRow);
         if (entry == null) return;
 
         JPopupMenu menu = new JPopupMenu();
@@ -318,5 +348,43 @@ public class PacketLogGUI extends JPanel {
         terms.add(typeName.toLowerCase());
         excludeField.setText(String.join(", ", terms));
         refreshTable();
+    }
+
+    /**
+     * Deterministic color per packet type name, derived from its hash so the same type always
+     * gets the same hue across refreshes/sessions.
+     */
+    private Color colorForType(String typeName) {
+        return typeColorCache.computeIfAbsent(typeName, name -> {
+            float hue = (Math.abs(name.hashCode()) % 360) / 360f;
+            return Color.getHSBColor(hue, 0.85f, 0.95f);
+        });
+    }
+
+    private static Color blend(Color base, Color tint, double ratio) {
+        int r = (int) (base.getRed() * (1 - ratio) + tint.getRed() * ratio);
+        int g = (int) (base.getGreen() * (1 - ratio) + tint.getGreen() * ratio);
+        int b = (int) (base.getBlue() * (1 - ratio) + tint.getBlue() * ratio);
+        return new Color(r, g, b);
+    }
+
+    /**
+     * Tints each row's background by its packet type (blended into the theme's own colors so it
+     * stays legible in both light and dark look-and-feels), instead of a flat fixed color.
+     */
+    private class TypeColorRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable tbl, Object value, boolean isSelected,
+                                                         boolean hasFocus, int row, int column) {
+            Component comp = super.getTableCellRendererComponent(tbl, value, isSelected, hasFocus, row, column);
+            Object typeName = tbl.getValueAt(row, TYPE_NAME_COLUMN);
+            if (typeName != null) {
+                Color base = isSelected ? tbl.getSelectionBackground() : tbl.getBackground();
+                Color tint = colorForType(typeName.toString());
+                comp.setBackground(blend(base, tint, isSelected ? 0.12 : 0.22));
+                comp.setForeground(isSelected ? tbl.getSelectionForeground() : tbl.getForeground());
+            }
+            return comp;
+        }
     }
 }
