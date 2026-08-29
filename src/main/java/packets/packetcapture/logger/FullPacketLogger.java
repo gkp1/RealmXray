@@ -47,19 +47,14 @@ public class FullPacketLogger {
      */
     public synchronized void onFrame(boolean incoming, int typeId, int size, byte[] raw, Packet deserialized) {
         String typeName = PacketType.containsKey(typeId) ? PacketType.byOrdinal(typeId).name() : "UNKNOWN";
-        String json = "";
-        boolean ok = false;
-        if (deserialized != null) {
-            try {
-                json = gson.toJson(deserialized);
-                ok = true;
-            } catch (Exception ignored) {
-                json = "";
-            }
-        }
 
+        // Note: does NOT gson-serialize deserialized here. That reflection call is expensive and
+        // this runs on the hot packet-processing path for every single frame (including
+        // high-frequency spam like movement), regardless of whether anything ever looks at it.
+        // PacketLogEntry.getJson() computes and caches it lazily, only when actually needed
+        // (detail view, or right below when saving to file).
         PacketLogEntry entry = new PacketLogEntry(System.currentTimeMillis(), incoming, typeId,
-                typeName, size, ok, json, raw);
+                typeName, size, deserialized != null, deserialized, raw);
 
         if (ring.size() >= capacity) {
             ring.removeFirst();
@@ -67,6 +62,7 @@ public class FullPacketLogger {
         ring.addLast(entry);
 
         if (fileOut != null) {
+            entry.getJson(); // force the lazy json before serializing the entry to disk
             fileOut.println(gson.toJson(entry));
             fileOut.flush();
         }
