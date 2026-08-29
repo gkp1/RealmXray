@@ -48,3 +48,6 @@ realmShark.properties
 .DS_Store
 /FameSessions/
 /debug/
+
+# tomato branch worktree, nested here for organization (see build-tomato.sh)
+/tomato/
