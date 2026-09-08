@@ -12,6 +12,7 @@ import packets.packetcapture.sniff.assembly.TcpStreamErrorHandler;
 import tomato.backend.TomatoPacketCapture;
 import tomato.backend.TomatoRootController;
 import tomato.backend.data.AbilityScalingManager;
+import tomato.backend.data.DpsFileLogger;
 import tomato.backend.data.TomatoData;
 import tomato.gui.TomatoGUI;
 import tomato.gui.chat.ChatGUI;
@@ -309,5 +310,6 @@ public class Tomato {
         data.loadPropList("chatPingMessages");
         data.loadPropList("entityIdPings");
         data.loadPropList("itemPings");
+        DpsFileLogger.INSTANCE.start();
     }
 }

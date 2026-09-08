@@ -44,6 +44,16 @@ public class StringDpsGUI extends DisplayDpsGUI {
     }
 
     /**
+     * Drops the freeze so live updates resume, used when a dungeon ends.
+     */
+    void resetFreeze() {
+        if (!freeze) return;
+        freeze = false;
+        button.setText("Freeze");
+        if (textAreaDPS != null) textAreaDPS.setEnabled(false);
+    }
+
+    /**
      * Sets the text of DPS logger text area.
      *
      * @param text       Sets the text of text area.
@@ -56,10 +66,10 @@ public class StringDpsGUI extends DisplayDpsGUI {
 
     @Override
     protected void renderData(MapInfoPacket map, List<Entity> sortedEntityHitList, ArrayList<NotificationPacket> notifications, long totalDungeonPcTime, boolean isLive) {
-        if (freeze && isLive && button.isVisible()) {
+        button.setVisible(isLive);
+        if (freeze && isLive) {
             return;
         }
-        button.setVisible(isLive);
         setTextAreaAndLabelDPS(DpsToString.stringDmgRealtime(map, sortedEntityHitList, notifications, data.player, totalDungeonPcTime), !isLive || freeze);
     }
 

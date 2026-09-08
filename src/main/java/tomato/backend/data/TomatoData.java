@@ -838,17 +838,18 @@ public class TomatoData {
         charId = -1;
         time = -1;
         if (map != null && isLoggedDungeon(map.displayName)) {
-            dpsData.add(
-                new DpsData(
-                    map,
-                    entityHitList,
-                    deathNotifications,
-                    dungeonTime(),
-                    timePcFirst,
-                    dpsPacketLog
-                )
+            DpsData finished = new DpsData(
+                map,
+                entityHitList,
+                deathNotifications,
+                dungeonTime(),
+                timePcFirst,
+                dpsPacketLog
             );
-            DpsGUI.updateLabel();
+            dpsData.add(finished);
+            DpsFileLogger.INSTANCE.logFinishedDungeon(finished);
+            DpsGUI.showFinishedDungeon(dpsData.size() - 1);
+            DpsGUI.maybeSaveImage(finished);
         }
         if (map != null) {
             dungeonStatData.updateDungeon(map.name, dungeonTime());

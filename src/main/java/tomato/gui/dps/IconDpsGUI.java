@@ -9,7 +9,9 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
+import javax.imageio.ImageIO;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
@@ -32,7 +34,7 @@ import tomato.realmshark.enums.CharacterClass;
 
 public class IconDpsGUI extends DisplayDpsGUI {
 
-    private static JPanel charPanel;
+    private JPanel charPanel;
 
     private JScrollPane scrollPane;
 
@@ -584,6 +586,44 @@ public class IconDpsGUI extends DisplayDpsGUI {
         this.notifications = deathNotifications;
         updateDps(map, sortedEntityHitList, totalDungeonPcTime);
         guiUpdate();
+    }
+
+    /**
+     * Renders the icon view into a png without ever showing it on screen. The panel is packed into
+     * an undecorated frame that is never made visible, since a component that was never displayed
+     * has no layout and would otherwise paint at zero size.
+     */
+    void renderToImage(
+        MapInfoPacket map,
+        List<Entity> sortedEntityHitList,
+        ArrayList<NotificationPacket> deathNotifications,
+        long totalDungeonPcTime,
+        File out
+    ) throws IOException {
+        this.notifications = deathNotifications;
+        updateDps(map, sortedEntityHitList, totalDungeonPcTime);
+
+        JFrame offscreen = new JFrame();
+        offscreen.setUndecorated(true);
+        offscreen.getContentPane().add(charPanel);
+        offscreen.pack();
+
+        Dimension size = charPanel.getSize();
+        BufferedImage image = new BufferedImage(
+            Math.max(1, size.width),
+            Math.max(1, size.height),
+            BufferedImage.TYPE_INT_RGB
+        );
+        Graphics2D g2d = image.createGraphics();
+        charPanel.paint(g2d);
+        g2d.dispose();
+
+        offscreen.getContentPane().remove(charPanel);
+        offscreen.dispose();
+
+        File parent = out.getParentFile();
+        if (parent != null) parent.mkdirs();
+        ImageIO.write(image, "png", out);
     }
 
     @Override

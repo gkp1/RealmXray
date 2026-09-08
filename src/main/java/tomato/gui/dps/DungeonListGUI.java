@@ -1,6 +1,7 @@
 package tomato.gui.dps;
 
 import tomato.backend.data.DpsData;
+import tomato.backend.data.DpsFileLogger;
 import tomato.backend.data.TomatoData;
 
 import javax.swing.filechooser.FileFilter;
@@ -190,6 +191,12 @@ public class DungeonListGUI extends JPanel {
                 if (d.checkBox != null && d.checkBox.isSelected()) {
                     d.save(folder, saveDebugData);
                 }
+            }
+            try {
+                DpsFileLogger.INSTANCE.saveCurrentLog();
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this, "Failed to save the session dps log: " + e.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
