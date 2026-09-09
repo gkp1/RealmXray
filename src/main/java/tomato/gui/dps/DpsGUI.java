@@ -190,16 +190,20 @@ public class DpsGUI extends JPanel {
     }
 
     public static void updateNewTickPacket(TomatoData data) {
-        if (!INSTANCE.liveUpdates || INSTANCE.previewingFinished) return;
-        INSTANCE.renderData(data.map, data.getEntityHitList(), data.getDeathNotifications(), data.dungeonTime(), true);
+        MapInfoPacket map = data.map;
+        Entity[] entityHitList = data.getEntityHitList();
+        ArrayList<NotificationPacket> notifications = data.getDeathNotifications();
+        long totalDungeonPcTime = data.dungeonTime();
+        SwingUtilities.invokeLater(() -> {
+            if (!INSTANCE.liveUpdates || INSTANCE.previewingFinished) return;
+            INSTANCE.renderData(map, entityHitList, notifications, totalDungeonPcTime, true);
+        });
     }
 
     private void renderData(MapInfoPacket map, Entity[] entityHitList, ArrayList<NotificationPacket> notifications, long totalDungeonPcTime, boolean b) {
-        SwingUtilities.invokeLater(() -> {
-            setCenterDisplay();
-            List<Entity> sortedEntityHitList = getSortedEntityList(entityHitList);
-            centerDisplay.renderData(map, sortedEntityHitList, notifications, totalDungeonPcTime, b);
-        });
+        setCenterDisplay();
+        List<Entity> sortedEntityHitList = getSortedEntityList(entityHitList);
+        centerDisplay.renderData(map, sortedEntityHitList, notifications, totalDungeonPcTime, b);
     }
 
     private List<Entity> getSortedEntityList(Entity[] entityHitList) {
@@ -282,8 +286,10 @@ public class DpsGUI extends JPanel {
      * the preview bar runs out, unless the user navigates away manually first.
      */
     public static void showFinishedDungeon(int index) {
-        INSTANCE.displayString.resetFreeze();
-        INSTANCE.startFinishedPreview(index);
+        SwingUtilities.invokeLater(() -> {
+            INSTANCE.displayString.resetFreeze();
+            INSTANCE.startFinishedPreview(index);
+        });
     }
 
     private void startFinishedPreview(int dpsIndex) {
@@ -344,9 +350,11 @@ public class DpsGUI extends JPanel {
      * every dungeon to be saved.
      */
     public static void maybeSaveImage(DpsData dpsData) {
-        if (!INSTANCE.saveImage.isSelected() && !INSTANCE.alwaysSaveImage.isSelected()) return;
-        INSTANCE.saveImage.setSelected(false);
-        SwingUtilities.invokeLater(() -> INSTANCE.saveDungeonImage(dpsData));
+        SwingUtilities.invokeLater(() -> {
+            if (!INSTANCE.saveImage.isSelected() && !INSTANCE.alwaysSaveImage.isSelected()) return;
+            INSTANCE.saveImage.setSelected(false);
+            INSTANCE.saveDungeonImage(dpsData);
+        });
     }
 
     private void saveDungeonImage(DpsData dpsData) {
