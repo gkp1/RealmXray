@@ -195,9 +195,11 @@ public class DpsGUI extends JPanel {
     }
 
     private void renderData(MapInfoPacket map, Entity[] entityHitList, ArrayList<NotificationPacket> notifications, long totalDungeonPcTime, boolean b) {
-        setCenterDisplay();
-        List<Entity> sortedEntityHitList = getSortedEntityList(entityHitList);
-        centerDisplay.renderData(map, sortedEntityHitList, notifications, totalDungeonPcTime, b);
+        SwingUtilities.invokeLater(() -> {
+            setCenterDisplay();
+            List<Entity> sortedEntityHitList = getSortedEntityList(entityHitList);
+            centerDisplay.renderData(map, sortedEntityHitList, notifications, totalDungeonPcTime, b);
+        });
     }
 
     private List<Entity> getSortedEntityList(Entity[] entityHitList) {

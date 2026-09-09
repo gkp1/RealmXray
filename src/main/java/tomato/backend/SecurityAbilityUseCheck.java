@@ -56,9 +56,10 @@ public class SecurityAbilityUseCheck {
             entity.stasisCounter--;
             for (StatData sd : stats) {
                 if (sd.statType == StatType.MP_STAT) {
+                    StatData currentMp = entity.stat.get(StatType.MP_STAT);
                     if (
-                        entity.stat.get(StatType.MP_STAT).statValue <=
-                        sd.statValue
+                        currentMp != null &&
+                        currentMp.statValue <= sd.statValue
                     ) {
                         StringBuilder sb = new StringBuilder();
                         sb.append("[").append(Util.getHourTime()).append("] ");
@@ -92,9 +93,10 @@ public class SecurityAbilityUseCheck {
         if (decoyCounter == 0) {
             for (StatData sd : stats) {
                 if (sd.statType == StatType.MP_STAT) {
+                    StatData currentMp = entity.stat.get(StatType.MP_STAT);
                     if (
-                        entity.stat.get(StatType.MP_STAT).statValue <=
-                        sd.statValue
+                        currentMp != null &&
+                        currentMp.statValue <= sd.statValue
                     ) {
                         StringBuilder sb = new StringBuilder();
                         sb.append("[").append(Util.getHourTime()).append("] ");
