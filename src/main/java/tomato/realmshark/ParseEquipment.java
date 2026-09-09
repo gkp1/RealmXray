@@ -78,6 +78,7 @@ public class ParseEquipment {
     }
 
     public static Boolean isParseItem(Equipment e) {
+        if (e == null) return false;
         final boolean isNonConsumable = e.labels != null && !e.labels.contains("CONSUMABLE");
         final boolean isSTUT = e.labels != null && (e.labels.contains("ST") || e.labels.contains("UT"));
 

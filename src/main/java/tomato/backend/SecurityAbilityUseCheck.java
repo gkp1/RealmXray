@@ -38,8 +38,9 @@ public class SecurityAbilityUseCheck {
 
         for (Entity player : data.playerListUpdated.values()) {
             if (player.stasisCounter == data.time) continue;
-            int item = player.stat.get(StatType.INVENTORY_1_STAT).statValue;
-            if (StasisOrbs.usingOrb(item, stasisDuration)) {
+            StatData invSlot1 = player.stat.get(StatType.INVENTORY_1_STAT);
+            if (invSlot1 == null) continue;
+            if (StasisOrbs.usingOrb(invSlot1.statValue, stasisDuration)) {
                 player.stasisCounter = 2;
             }
         }
@@ -64,13 +65,8 @@ public class SecurityAbilityUseCheck {
                         StringBuilder sb = new StringBuilder();
                         sb.append("[").append(Util.getHourTime()).append("] ");
                         sb.append(entity.name()).append(": ");
-                        sb.append(
-                            IdToAsset.objectName(
-                                entity.stat.get(
-                                    StatType.INVENTORY_1_STAT
-                                ).statValue
-                            )
-                        );
+                        StatData invSlot1 = entity.stat.get(StatType.INVENTORY_1_STAT);
+                        sb.append(invSlot1 != null ? IdToAsset.objectName(invSlot1.statValue) : "unknown item");
                         SecurityGUI.updateAbilityUsage(sb.toString());
                     }
                 }
@@ -101,13 +97,8 @@ public class SecurityAbilityUseCheck {
                         StringBuilder sb = new StringBuilder();
                         sb.append("[").append(Util.getHourTime()).append("] ");
                         sb.append(entity.name()).append(": ");
-                        sb.append(
-                            IdToAsset.objectName(
-                                entity.stat.get(
-                                    StatType.INVENTORY_1_STAT
-                                ).statValue
-                            )
-                        );
+                        StatData invSlot1 = entity.stat.get(StatType.INVENTORY_1_STAT);
+                        sb.append(invSlot1 != null ? IdToAsset.objectName(invSlot1.statValue) : "unknown item");
                         SecurityGUI.updateAbilityUsage(sb.toString());
                     }
                 }

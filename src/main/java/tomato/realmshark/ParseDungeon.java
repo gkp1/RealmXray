@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import javax.xml.parsers.ParserConfigurationException;
 import org.xml.sax.SAXException;
 import packets.incoming.MapInfoPacket;
+import util.DiagnosticLog;
 import util.StringXML;
 
 public class ParseDungeon {
@@ -68,7 +69,11 @@ public class ParseDungeon {
                 | IOException
                 | SAXException e
             ) {
-                throw new RuntimeException(e);
+                // A missing/unreadable mods XML must not fail this class's static initializer -
+                // that would permanently poison ParseDungeon (and anything using it, e.g. loot
+                // tracking on every NEWTICK) for the rest of the JVM's life. Skip this file and
+                // keep whatever modifiers were already loaded from the others.
+                DiagnosticLog.log("DUNGEON_MODIFIER_LOAD_FAILED", "path=" + path, e);
             }
         }
         NAME_TO_ID_MODS.put("|S", -11);
@@ -107,7 +112,9 @@ public class ParseDungeon {
             }
             NAME_TO_ID_PORTAL.put("Realm of the Mad God", 1796);
         } catch (ParserConfigurationException | IOException | SAXException e) {
-            throw new RuntimeException(e);
+            // Same reasoning as parseDungeonModifier(): don't let a missing/unreadable portals
+            // XML permanently poison this class via a failed static initializer.
+            DiagnosticLog.log("DUNGEON_PORTAL_LOAD_FAILED", "path=" + PORTAL_XML_PATH, e);
         }
     }
 
@@ -121,7 +128,7 @@ public class ParseDungeon {
             String key = split[i];
 
             Integer integer = NAME_TO_ID_MODS.get(key);
-            array[i] = integer;
+            array[i] = integer != null ? integer : 0;
         }
 
         return array;
