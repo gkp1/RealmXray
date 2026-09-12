@@ -32,6 +32,7 @@ JAR_NAME="$(basename "$REALMSHARK_JAR")"
 echo "==> Built $JAR_NAME"
 
 echo "==> Updating tomato/libs with $JAR_NAME"
+mkdir -p "$TOMATO_DIR/libs"
 rm -f "$TOMATO_DIR"/libs/RealmShark-*.jar
 cp "$REALMSHARK_JAR" "$TOMATO_DIR/libs/$JAR_NAME"
 
