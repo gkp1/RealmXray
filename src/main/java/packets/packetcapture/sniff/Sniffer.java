@@ -15,6 +15,7 @@ import pcap.spi.Service;
 import pcap.spi.exception.ErrorException;
 import pcap.spi.exception.error.*;
 import pcap.spi.option.DefaultLiveOptions;
+import util.DiagnosticLog;
 import util.Util;
 
 import java.net.Inet4Address;
@@ -69,9 +70,12 @@ public class Sniffer {
         realmPcap = null;
         stop = false;
 
+        DiagnosticLog.log("INTERFACES_FOUND", "count=" + interfaceList.length + " interfaces=" + Arrays.toString(interfaceList));
+
         for (int i = 0; i < interfaceList.length; i++) {
             DefaultLiveOptions defaultLiveOptions = new DefaultLiveOptions();
             defaultLiveOptions.timeout(60000);
+            defaultLiveOptions.promiscuous(false); // only this host's own traffic is ever needed
             Pcap pcap = null;
 
             try {
@@ -105,6 +109,7 @@ public class Sniffer {
 
                 pcap.setFilter("tcp port " + port, true);
                 pcaps[i] = pcap;
+                DiagnosticLog.log("INTERFACE_OPENED", "index=" + i + " interface=" + interfaceList[i]);
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -136,11 +141,12 @@ public class Sniffer {
      * @param pcap Current handle to the Pcap instance.
      */
     public void startPacketSniffer(Pcap pcap) {
-        new Thread(new Runnable() {
+        Thread captureThread = new Thread(new Runnable() {
             final Pcap p = pcap;
 
             @Override
             public void run() {
+                DiagnosticLog.log("CAPTURE_THREAD_START", "thread=" + Thread.currentThread().getName());
                 NativeBridge.PacketListener listener = packet -> {
                     TcpStreamErrorHandler.INSTANCE.logTCPPacket(packet);
 
@@ -155,10 +161,18 @@ public class Sniffer {
                     }
                 };
                 NativeBridge.loop(p, -1, listener);
+                DiagnosticLog.log("CAPTURE_THREAD_EXIT", "NativeBridge.loop() returned for thread=" + Thread.currentThread().getName());
             }
-        }).start();
+        });
+        captureThread.setName("RealmShark-Capture-" + captureThreadCounter.incrementAndGet());
+        captureThread.setDaemon(true);
+        captureThread.setUncaughtExceptionHandler((t, e) ->
+                DiagnosticLog.log("CAPTURE_THREAD_UNCAUGHT", "thread=" + t.getName(), e));
+        captureThread.start();
         pause(1);
     }
+
+    private static final java.util.concurrent.atomic.AtomicInteger captureThreadCounter = new java.util.concurrent.atomic.AtomicInteger();
 
     /**
      * Close threads of sniffer network interfaces not being used after
@@ -171,11 +185,14 @@ public class Sniffer {
             }
             while (!stop) {
                 if (realmPcap != null) {
+                    int closedCount = 0;
                     for (Pcap pcap : pcaps) {
                         if (pcap != null && realmPcap != pcap) {
                             pcap.close();
+                            closedCount++;
                         }
                     }
+                    DiagnosticLog.log("INTERFACES_CONVERGED", "kept=" + realmPcap + " closedCount=" + closedCount);
                     return;
                 }
                 pause(100);
@@ -190,11 +207,20 @@ public class Sniffer {
      * up and processes the buffered packets in the ring buffer and goes
      * back to sleep.
      */
+    private static final long HEARTBEAT_INTERVAL_MS = 30_000;
+    private long lastHeartbeat = 0;
+
     private void processBufferedPackets() {
         try {
             while (!stop) {
                 synchronized (thisObject) {
                     thisObject.wait();
+                }
+                long now = System.currentTimeMillis();
+                if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+                    lastHeartbeat = now;
+                    DiagnosticLog.log("HEARTBEAT", "incoming.packetMap=" + incoming.packetMapSize() +
+                            " outgoing.packetMap=" + outgoing.packetMapSize() + " ringBuffer.size=" + ringBuffer.size());
                 }
                 while (!ringBuffer.isEmpty()) {
                     RawPacket packet;

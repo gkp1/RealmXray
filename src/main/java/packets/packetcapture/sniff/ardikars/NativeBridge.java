@@ -10,6 +10,7 @@ import pcap.spi.Pcap;
 import pcap.spi.Service;
 import pcap.spi.exception.ErrorException;
 import pcap.spi.option.DefaultLiveOptions;
+import util.DiagnosticLog;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
@@ -77,6 +78,7 @@ public class NativeBridge {
 
             NativeMappings.pcap_loop(p, packetCount, new GotPacketFuncExecutor(listener, SimpleExecutor.getInstance()), null);
         } catch (Exception e) {
+            DiagnosticLog.log("PCAP_LOOP_EXCEPTION", "loop() threw", e);
             e.printStackTrace();
         }
     }
@@ -152,6 +154,7 @@ public class NativeBridge {
                     }
                 });
             } catch (Throwable e) {
+                DiagnosticLog.log("GOT_PACKET_SWALLOWED", "exception in got_packet callback", e);
             }
         }
 

@@ -2,6 +2,7 @@ package packets.packetcapture.sniff.assembly;
 
 import packets.packetcapture.sniff.netpackets.RawPacket;
 import packets.packetcapture.sniff.netpackets.TcpPacket;
+import util.DiagnosticLog;
 
 import java.util.Arrays;
 
@@ -40,6 +41,7 @@ public class TcpStreamErrorHandler {
      */
     void errorChecker(TcpStreamBuilder tcpStreamBuilder) {
         if (tcpStreamBuilder.packetMap.size() > 95) {
+            DiagnosticLog.log("PACKET_LOSS_DETECTED", "packetMap.size()=" + tcpStreamBuilder.packetMap.size());
             long index = tcpStreamBuilder.sequenseNumber;
             int counter = 0;
             while (counter < 100000) {
@@ -54,6 +56,7 @@ public class TcpStreamErrorHandler {
                 counter++;
             }
         } else if (tcpStreamBuilder.packetMap.size() >= 100) {
+            DiagnosticLog.log("SNIFFER_STOP_TRIGGERED", "packetMap.size()=" + tcpStreamBuilder.packetMap.size() + " sequenseNumber=" + tcpStreamBuilder.sequenseNumber);
             stop();
             tcpStreamBuilder.reset();
         }

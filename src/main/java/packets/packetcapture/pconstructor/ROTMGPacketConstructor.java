@@ -1,5 +1,6 @@
 package packets.packetcapture.pconstructor;
 
+import util.DiagnosticLog;
 import util.Util;
 
 import java.nio.ByteBuffer;
@@ -40,8 +41,12 @@ public class ROTMGPacketConstructor {
                     pSize = Util.decodeInt(bytes);
                     if (pSize > 200000) {
                         Util.printLogs("Oversize packet construction.");
+                        DiagnosticLog.log("ROTMG_OVERSIZE", "pSize=" + pSize + " index=" + index);
                         pSize = 0;
                         return;
+                    }
+                    if (pSize <= 0) {
+                        DiagnosticLog.log("ROTMG_DESYNC", "decoded non-positive pSize=" + pSize + " index=" + index);
                     }
                 }
 

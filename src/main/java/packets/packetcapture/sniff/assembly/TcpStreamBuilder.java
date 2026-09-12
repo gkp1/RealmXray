@@ -72,4 +72,11 @@ public class TcpStreamBuilder {
         sequenseNumber = 0;
         idNumber = 0;
     }
+
+    /**
+     * Number of out-of-order TCP packets currently buffered waiting for the missing sequence number.
+     */
+    public int packetMapSize() {
+        return packetMap.size();
+    }
 }

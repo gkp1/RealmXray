@@ -16,6 +16,7 @@ This `realmshark` branch contains only the sniffing/decoding library — there i
 - Version string is auto-generated into `src/main/java/realmshark/version/Version.java` by the `generateSources` Gradle task (runs before `compileJava`) from `project.version` in `build.gradle` — never hand-edit `Version.java`.
 - To bump the release name/version, edit `applicationName`/`project.version` in `build.gradle`.
 - Windows only for now; platform-specific native selection (`lwjglNatives`) happens in `build.gradle` based on OS (mac not yet supported for the sniffer itself).
+- `./build-tomato.sh` automates the cross-branch flow described above: builds this library's shadowJar, copies it into a sibling `tomato/` worktree's `/libs` (repointing `tomato/build.gradle` at the new jar name), then builds Tomato's shadowJar. Requires a `tomato` worktree checked out alongside this repo at `./tomato`. It pins `JAVA_HOME` to a JDK 17 install if present, since the pinned Gradle version doesn't support newer JDKs found on `PATH`.
 
 ## Tests
 

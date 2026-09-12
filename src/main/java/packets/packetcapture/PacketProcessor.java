@@ -13,6 +13,7 @@ import packets.packetcapture.sniff.PProcessor;
 import packets.packetcapture.sniff.Sniffer;
 import packets.reader.BufferReader;
 import packets.packetcapture.sniff.gui.MissingNpcapGUI;
+import util.DiagnosticLog;
 import util.Util;
 
 import java.nio.ByteBuffer;
@@ -61,16 +62,20 @@ public class PacketProcessor extends Thread implements PProcessor {
      * Method to start the packet sniffer that will send packets back to receivedPackets.
      */
     public void tapPackets() {
+        DiagnosticLog.log("PROCESSING_THREAD_START", "thread=" + Thread.currentThread().getName());
         logger.startLogger();
         incomingPacketConstructor.startResets();
         outgoingPacketConstructor.startResets();
         try {
             sniffer.startSniffer();
         } catch (UnsatisfiedLinkError e) {
+            DiagnosticLog.log("PROCESSING_THREAD_DIED", "UnsatisfiedLinkError, npcap likely missing", e);
             new MissingNpcapGUI();
         } catch (Exception e) {
+            DiagnosticLog.log("PROCESSING_THREAD_DIED", "startSniffer() threw, thread is about to terminate", e);
             e.printStackTrace();
         }
+        DiagnosticLog.log("PROCESSING_THREAD_END", "tapPackets() returning, thread=" + Thread.currentThread().getName());
     }
 
     /**
@@ -108,7 +113,9 @@ public class PacketProcessor extends Thread implements PProcessor {
         for (int i = 0; i < srcAddr.length; i++) {
             if (srcAddr[i] != srcIp[i]) {
                 System.arraycopy(srcIp, 0, srcAddr, 0, srcAddr.length);
-                Register.INSTANCE.emitPacketLogs(new IpAddress(srcIp));
+                IpAddress ipAddress = new IpAddress(srcIp);
+                FullPacketLogger.INSTANCE.onFrame(true, PacketType.IP_ADDRESS.getIndex(), srcIp.length, srcIp, ipAddress);
+                Register.INSTANCE.emitPacketLogs(ipAddress);
                 return;
             }
         }

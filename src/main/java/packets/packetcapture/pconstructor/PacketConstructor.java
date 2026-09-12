@@ -3,6 +3,7 @@ package packets.packetcapture.pconstructor;
 import packets.packetcapture.PacketProcessor;
 import packets.packetcapture.encryption.RC4;
 import packets.packetcapture.encryption.TickAligner;
+import util.DiagnosticLog;
 
 import java.nio.ByteBuffer;
 
@@ -70,6 +71,7 @@ public class PacketConstructor {
                 packetProcessor.processPackets(type, size, encryptedData, incoming);
             }
         } catch (Exception e) {
+            DiagnosticLog.log("PACKET_RECEIVE_ERROR", "incoming=" + incoming, e);
             e.printStackTrace();
         }
     }

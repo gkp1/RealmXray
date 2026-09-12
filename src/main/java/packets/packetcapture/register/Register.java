@@ -3,6 +3,7 @@ package packets.packetcapture.register;
 import packets.Packet;
 import packets.PacketType;
 import packets.packetcapture.logger.PacketLogger;
+import util.DiagnosticLog;
 import util.Pair;
 
 import java.util.ArrayList;
@@ -29,12 +30,12 @@ public class Register {
         emitting = true;
         if (packetListeners.containsKey(packet.getClass())) {
             for (IPacketListener<Packet> processor : packetListeners.get(packet.getClass()))
-                processor.process(packet);
+                invokeListener(processor, packet);
         }
 
         if (packetListeners.containsKey(Packet.class)) {
             for (IPacketListener<Packet> processor : packetListeners.get(Packet.class))
-                processor.process(packet);
+                invokeListener(processor, packet);
         }
         emitting = false;
 
@@ -43,6 +44,20 @@ public class Register {
                 p.left().remove(p.right());
             }
             remove.clear();
+        }
+    }
+
+    /**
+     * Invokes a listener, logging (and rethrowing unchanged) any exception it throws so a bad
+     * listener can be identified without altering current propagation behavior.
+     */
+    private void invokeListener(IPacketListener<Packet> processor, Packet packet) {
+        try {
+            processor.process(packet);
+        } catch (RuntimeException | Error t) {
+            DiagnosticLog.log("EMIT_LISTENER_THREW",
+                    "listener=" + processor.getClass().getName() + " packetType=" + packet.getClass().getName(), t);
+            throw t;
         }
     }
 
