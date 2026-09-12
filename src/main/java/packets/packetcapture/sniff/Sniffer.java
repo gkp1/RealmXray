@@ -18,8 +18,13 @@ import pcap.spi.option.DefaultLiveOptions;
 import util.DiagnosticLog;
 import util.Util;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.net.Inet4Address;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * A sniffer used to tap packets out of the Windows OS network layer. Before sniffing
@@ -36,6 +41,8 @@ public class Sniffer {
     private Pcap[] pcaps;
     private Pcap realmPcap;
     private boolean stop;
+    private final List<Thread> captureThreads = Collections.synchronizedList(new ArrayList<>());
+    private long convergenceWindowStartNanos;
 
     /**
      * Constructor of a Windows sniffer.
@@ -71,6 +78,8 @@ public class Sniffer {
         stop = false;
 
         DiagnosticLog.log("INTERFACES_FOUND", "count=" + interfaceList.length + " interfaces=" + Arrays.toString(interfaceList));
+        captureThreads.clear();
+        convergenceWindowStartNanos = System.nanoTime();
 
         for (int i = 0; i < interfaceList.length; i++) {
             DefaultLiveOptions defaultLiveOptions = new DefaultLiveOptions();
@@ -168,6 +177,7 @@ public class Sniffer {
         captureThread.setDaemon(true);
         captureThread.setUncaughtExceptionHandler((t, e) ->
                 DiagnosticLog.log("CAPTURE_THREAD_UNCAUGHT", "thread=" + t.getName(), e));
+        captureThreads.add(captureThread);
         captureThread.start();
         pause(1);
     }
@@ -185,6 +195,8 @@ public class Sniffer {
             }
             while (!stop) {
                 if (realmPcap != null) {
+                    logConvergenceCpuUsage();
+
                     int closedCount = 0;
                     for (Pcap pcap : pcaps) {
                         if (pcap != null && realmPcap != pcap) {
@@ -199,6 +211,39 @@ public class Sniffer {
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Logs total CPU time consumed by all capture threads (across every interface opened, not
+     * just the one that ended up being kept) from the moment interfaces were enumerated to the
+     * moment the correct one was identified - the window during which the promiscuous-mode
+     * setting on each interface actually matters. Used to measure/compare its real cost.
+     */
+    private void logConvergenceCpuUsage() {
+        try {
+            ThreadMXBean bean = ManagementFactory.getThreadMXBean();
+            if (!bean.isThreadCpuTimeSupported()) return;
+            if (!bean.isThreadCpuTimeEnabled()) bean.setThreadCpuTimeEnabled(true);
+
+            long totalCpuNanos = 0;
+            int threadCount;
+            synchronized (captureThreads) {
+                threadCount = captureThreads.size();
+                for (Thread t : captureThreads) {
+                    long cpuNanos = bean.getThreadCpuTime(t.getId());
+                    if (cpuNanos > 0) totalCpuNanos += cpuNanos;
+                }
+            }
+            long wallClockMs = (System.nanoTime() - convergenceWindowStartNanos) / 1_000_000;
+            DiagnosticLog.log(
+                "INTERFACE_CONVERGENCE_CPU_TIME",
+                "captureThreads=" + threadCount +
+                    " totalCaptureCpuMs=" + (totalCpuNanos / 1_000_000) +
+                    " wallClockMs=" + wallClockMs
+            );
+        } catch (Exception e) {
+            DiagnosticLog.log("INTERFACE_CONVERGENCE_CPU_TIME_FAILED", "could not measure", e);
         }
     }
 
