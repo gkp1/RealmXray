@@ -42,7 +42,8 @@ not by guessing.
 
 ## 📋 Full Packet Log tab *(new)*
 
-*📸 screenshot: `docs/screenshots/packet-log.png`*
+![Packet Log tab](docs/screenshots/packet-log.png)
+![Packet Log detail view](docs/screenshots/packet-log-detail.png)
 
 A real packet-by-packet log, not just aggregate stats — every frame that
 crosses the wire, known or unknown packet type, with:
@@ -58,7 +59,7 @@ crosses the wire, known or unknown packet type, with:
 
 ## 📶 Server Info panel *(new)*
 
-*📸 screenshot: `docs/screenshots/server-info.png`*
+![Server Info window](docs/screenshots/server-info.png)
 
 A small window (Info → Server Info) answering "what am I actually connected
 to right now?" — tracks both your **current connection** and your **last
@@ -75,7 +76,7 @@ different server), each showing:
 
 ## 📈 DPS logger improvements
 
-*📸 screenshot: `docs/screenshots/dps-finished-preview.png`*
+![DPS Logger tab, Save Image controls](docs/screenshots/dps-logger.png)
 
 - **Live finished-dungeon preview**: when a dungeon ends, the DPS panel
   stays in live mode but shows that dungeon's final numbers for 10 seconds
