@@ -1,3 +1,109 @@
+# RealmXray
+
+### A public fork of RealmShark + Tomato, focused on reliability, observability, and connection insight.
+
+This repo tracks [X-com/RealmShark](https://github.com/X-com/RealmShark) upstream (`main` ← `realmshark`, `tomato` ← `tomato`) and adds the features below on top. See [Original RealmShark README](#original-realmshark-readme) below for the base project's own docs, install guide, and credits — unchanged.
+
+## 🎯 Goal
+
+Upstream RealmShark/Tomato is a solid sniffer + DPS meter, but a few things
+made it hard to trust during real play sessions: the DPS panel could go
+silently stale mid-dungeon with no way to tell why, and there was no way to
+see which packets were actually crossing the wire or which server you were
+even connected to. This fork's additions all serve one goal: **make failures
+visible instead of silent, and make the connection itself inspectable.**
+
+## 🐛 Reliability fixes
+
+Several bugs were causing the DPS panel to silently stop updating — sometimes
+for the rest of a session — with no error shown anywhere. All were found by
+building the diagnostic logging below and reading real crash data from it,
+not by guessing.
+
+- Fixed the DPS panel needing a Freeze→Unfreeze click to "unstick" after
+  going stale (a Swing thread-safety bug — updates weren't happening on the
+  EDT).
+- Fixed the DPS panel freezing **permanently** after a dungeon finished, with
+  no button able to recover it (a cross-thread visibility race in the new
+  finished-dungeon preview feature below).
+- Fixed a class-poisoning bug where a missing/stale game asset file
+  (`mods2.xml`) could permanently break dungeon-loot tracking — and
+  therefore DPS — for the rest of the session, immune to restarting the
+  sniffer (only a full app restart cleared it, since the poisoned class
+  state lives in the JVM, not the sniffer).
+- Fixed several recurring `NullPointerException` crash loops in
+  security/equipment/mana-tracking code that were silently aborting packet
+  dispatch on every tick once triggered.
+- Fixed an off-by-one bug in DPS history navigation (prev/next could land on
+  the wrong dungeon).
+- Disabled promiscuous mode on the packet capture (was on by default on every
+  network interface, unnecessary overhead that scaled with however many
+  interfaces — VPNs, virtual adapters — a machine reports).
+
+## 📋 Full Packet Log tab *(new)*
+
+*📸 screenshot: `docs/screenshots/packet-log.png`*
+
+A real packet-by-packet log, not just aggregate stats — every frame that
+crosses the wire, known or unknown packet type, with:
+- Sortable columns, type-colored rows, stable scroll position during live
+  updates (previously reset to the top on every refresh).
+- An exclude filter (hide packet types by substring match) plus a
+  right-click "Hide `<type>`" shortcut on any row.
+- A detail view per packet (lazily-computed JSON, so viewing it costs
+  nothing for the 99.9% of packets nobody looks at).
+- Save-to-file (JSONL), so a session can be captured and inspected later.
+- Server-IP-change events now show up here too — previously detected
+  internally but silently discarded, never reaching the log or GUI at all.
+
+## 📶 Server Info panel *(new)*
+
+*📸 screenshot: `docs/screenshots/server-info.png`*
+
+A small window (Info → Server Info) answering "what am I actually connected
+to right now?" — tracks both your **current connection** and your **last
+Nexus connection** separately (since entering a dungeon reconnects you to a
+different server), each showing:
+- IP address.
+- Region (e.g. `EUEast`, `USWest4`) — resolved from a built-in table of known
+  RotMG server IPs that already existed in the codebase but was never
+  surfaced anywhere.
+- Geolocation (country/region) via an online lookup, cached per IP.
+- Live ping — measured as TCP connect-time to the game port itself, more
+  representative of actual connection quality than ICMP, refreshed every
+  10s.
+
+## 📈 DPS logger improvements
+
+*📸 screenshot: `docs/screenshots/dps-finished-preview.png`*
+
+- **Live finished-dungeon preview**: when a dungeon ends, the DPS panel
+  stays in live mode but shows that dungeon's final numbers for 10 seconds
+  (with a countdown progress bar at the top) before automatically resuming
+  live updates — read the result without losing your place.
+- **Save Image**: a button (+ an "Always" checkbox) to export a PNG snapshot
+  of the DPS card for any dungeon, rendered off-screen.
+- **Session DPS file log**: every finished dungeon's stats are appended to a
+  JSONL log file for the session automatically.
+
+## ⚡ Performance & tooling
+
+- Packet-log JSON serialization is now lazy — previously ran on every single
+  captured packet (including high-frequency spam like movement) regardless
+  of whether anything ever looked at it.
+- `build-tomato.sh` — builds the RealmShark library, feeds the jar into the
+  Tomato worktree, and builds Tomato, in one command. Works on Linux natively
+  and on Windows 11 via Git Bash.
+- `update-from-upstream.sh` — pulls the latest changes from
+  [X-com/RealmShark](https://github.com/X-com/RealmShark) into whichever
+  branch/worktree you run it from (`main` ← `upstream/realmshark`, `tomato` ←
+  `upstream/tomato`).
+- Fixed the Gradle wrapper so `./gradlew` works standalone without an IDE.
+
+---
+
+## Original RealmShark README
+
 # RealmShark  
 ### A library/GUI packet sniffer for Realm of the Mad God built with Java.
 
