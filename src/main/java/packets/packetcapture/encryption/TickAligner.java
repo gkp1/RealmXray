@@ -2,6 +2,7 @@ package packets.packetcapture.encryption;
 
 import packets.PacketType;
 import packets.packetcapture.sniff.assembly.TcpStreamErrorHandler;
+import util.DiagnosticLog;
 import util.Util;
 
 import java.nio.ByteBuffer;
@@ -56,6 +57,7 @@ public class TickAligner {
                 if (CURRENT_TICK != tick) {
                     String error = "Timeline synchronization critical failure, got: " + tick + " expected: " + CURRENT_TICK;
                     TcpStreamErrorHandler.INSTANCE.dumpData(error);
+                    DiagnosticLog.log("RC4_DESYNC_DETECTED", "got=" + tick + " expected=" + CURRENT_TICK);
                     rc4.reset();
                     synced = false;
                     TickA = null;
@@ -70,15 +72,20 @@ public class TickAligner {
                 if (TickA != null) {
                     rc4.reset();
                     System.out.println("Packet bytes between sync packets: " + packetBytes);
+                    DiagnosticLog.log("RC4_RESYNC_START", "packetBytes=" + packetBytes);
+                    long start = System.nanoTime();
                     int i = RC4Aligner.syncCipher(rc4, TickA, tick, packetBytes);
+                    long elapsedMs = (System.nanoTime() - start) / 1_000_000;
                     if (i != -1) {
                         synced = true;
                         rc4.skip(packetBytes).decrypt(tick);
                         rc4.skip(size - 5 - 4);
                         CURRENT_TICK = Util.decodeInt(tick);
                         System.out.println("Synced. offset: " + i + " tick: " + CURRENT_TICK);
+                        DiagnosticLog.log("RC4_RESYNC_SUCCEEDED", "offset=" + i + " tick=" + CURRENT_TICK + " elapsedMs=" + elapsedMs);
                     } else {
                         Util.printLogs("Time Sync Failed");
+                        DiagnosticLog.log("RC4_RESYNC_FAILED", "elapsedMs=" + elapsedMs + " will retry on next tick pair");
                     }
                     TickA = null;
                     packetBytes = 0;

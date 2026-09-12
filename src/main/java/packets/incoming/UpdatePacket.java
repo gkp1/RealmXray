@@ -62,7 +62,7 @@ public class UpdatePacket extends Packet {
     public String toString() {
         return "UpdatePacket" +
                 "\n   levelType=" + levelType +
-                "\n   playerPos=" + "(" + pos.x + ", " + pos.y + ")" +
+                "\n   playerPos=" + (pos != null ? "(" + pos.x + ", " + pos.y + ")" : "(null)") +
                 (tiles.length == 0 ? "" : Util.showAll(tiles)) +
                 (newObjects.length == 0 ? "" : Util.showAll(newObjects)) +
                 (drops.length == 0 ? "" : Arrays.toString(drops));

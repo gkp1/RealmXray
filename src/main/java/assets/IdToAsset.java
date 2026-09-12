@@ -354,7 +354,7 @@ public class IdToAsset {
      */
     public static int getIdProjectileSlotType(int id) {
         IdToAsset i = objectID.get(id);
-        if (i == null) return 0;
+        if (i == null || i.projectiles.length == 0) return 0;
         return i.projectiles[0].slotType;
     }
 

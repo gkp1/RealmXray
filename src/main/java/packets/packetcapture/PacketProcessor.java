@@ -152,6 +152,7 @@ public class PacketProcessor extends Thread implements PProcessor {
             deserialized = packetType;
         } catch (Exception e) {
             Util.printLogs("Buffer exploded: " + pData.getIndex() + "/" + pData.size());
+            DiagnosticLog.log("PACKET_DESERIALIZE_FAILED", "type=" + type + " index=" + pData.getIndex() + "/" + pData.size(), e);
             debugPackets(type, raw);
         }
 

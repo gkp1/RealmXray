@@ -8,6 +8,7 @@ package packets.packetcapture.encryption;
  */
 public class RC4Aligner {
     public static final int SEARCH_SIZE = 10000000;
+    private static final long TICK_SEARCH_TIME_BUDGET_NANOS = 2_000_000_000L; // 2s
 
     /**
      * String to byte converter.
@@ -83,7 +84,16 @@ public class RC4Aligner {
         RC4 tmp = cipher.fork();
         finderB.skip(delta);
         int offset = -1;
+        // Bounded by wall-clock time, not just iteration count: this runs synchronously on the
+        // packet-processing thread, and TickAligner already retries on the next tick-packet pair
+        // if a sync attempt fails - so capping search time here can't reduce eventual resync
+        // capability, it only guarantees a single attempt can't block the whole pipeline for
+        // minutes (SEARCH_SIZE=10,000,000 iterations of synchronized RC4 calls previously could).
+        long deadline = System.nanoTime() + TICK_SEARCH_TIME_BUDGET_NANOS;
         while (offset < SEARCH_SIZE) {
+            if (System.nanoTime() >= deadline) {
+                return -1;
+            }
             offset++;
             finderA.copy(tmp);
             int a = decodeInt(A, tmp);
