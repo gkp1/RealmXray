@@ -6,6 +6,8 @@ import java.net.URL;
 import java.nio.file.AccessDeniedException;
 import javax.swing.*;
 import packets.PacketType;
+import packets.incoming.MapInfoPacket;
+import packets.incoming.ip.IpAddress;
 import packets.packetcapture.PacketProcessor;
 import packets.packetcapture.register.Register;
 import packets.packetcapture.sniff.assembly.TcpStreamErrorHandler;
@@ -16,6 +18,7 @@ import tomato.backend.data.DpsFileLogger;
 import tomato.backend.data.TomatoData;
 import tomato.gui.TomatoGUI;
 import tomato.gui.chat.ChatGUI;
+import tomato.gui.maingui.ServerConnectionGUI;
 import tomato.gui.maingui.TomatoBandwidth;
 import tomato.gui.maingui.TomatoMenuBar;
 import tomato.gui.warnings.JavaOutOfMemoryGUI;
@@ -205,6 +208,15 @@ public class Tomato {
      */
     private static void packetRegister(TomatoPacketCapture packCap) {
         Register.INSTANCE.subscribePacketLogger(TomatoBandwidth::setInfo);
+
+        Register.INSTANCE.register(
+            PacketType.IP_ADDRESS,
+            packet -> ServerConnectionGUI.onIpAddress((IpAddress) packet)
+        );
+        Register.INSTANCE.register(
+            PacketType.MAPINFO,
+            packet -> ServerConnectionGUI.onMapInfo((MapInfoPacket) packet)
+        );
 
         Register.INSTANCE.register(
             PacketType.CREATE_SUCCESS,

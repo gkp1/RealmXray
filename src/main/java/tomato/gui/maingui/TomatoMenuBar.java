@@ -22,7 +22,7 @@ import java.awt.event.ActionListener;
  * Menu bar builder class
  */
 public class TomatoMenuBar implements ActionListener {
-    private JMenuItem about, borders, clearChat, bandwidth, javav, clearDpsLogs, theme, fontMenu, dpsOptions, chat, sound, chatPingMessage, entityIdPingMessage, itemPingMessage, enchantPingMessage;
+    private JMenuItem about, borders, clearChat, bandwidth, serverInfo, javav, clearDpsLogs, theme, fontMenu, dpsOptions, chat, sound, chatPingMessage, entityIdPingMessage, itemPingMessage, enchantPingMessage;
     private JRadioButtonMenuItem fontSize8, fontSize12, fontSize16, fontSize24, fontSize48, fontSizeCustom;
     private JRadioButtonMenuItem themeDarcula, themeighContrastDark, themeHighContrastLight, themeIntelliJ, themeSolarizedDark, themeSolarizedLight;
     private JRadioButtonMenuItem fontNameMonospaced, fontNameDialog, fontNameDialogInput, fontNameSerif, fontNameSansSerif, fontNameSegoe;
@@ -287,12 +287,15 @@ public class TomatoMenuBar implements ActionListener {
         about.addActionListener(this);
         bandwidth = new JMenuItem("Net traffic");
         bandwidth.addActionListener(this);
+        serverInfo = new JMenuItem("Server Info");
+        serverInfo.addActionListener(this);
         javav = new JMenuItem("Java version");
         javav.addActionListener(this);
         info = new JMenu("Info");
         info.add(about);
         info.add(javav);
         info.add(bandwidth);
+        info.add(serverInfo);
         jMenuBar.add(info);
 
         autoStartSnifferPreset();
@@ -921,6 +924,8 @@ public class TomatoMenuBar implements ActionListener {
             new TomatoPopupAbout().addPopup(frame);
         } else if (e.getSource() == bandwidth) { // Opens bandwidth window
             TomatoBandwidth.make(frame);
+        } else if (e.getSource() == serverInfo) { // Opens server info window
+            ServerConnectionGUI.make(frame);
         } else if (e.getSource() == javav) { // Opens bandwidth window
             String version = System.getProperty("java.version");
             String bit = System.getProperty("sun.arch.data.model");
