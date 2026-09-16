@@ -23,6 +23,7 @@ import tomato.gui.maingui.ServerConnectionGUI;
 import tomato.gui.maingui.TomatoBandwidth;
 import tomato.gui.maingui.TomatoMenuBar;
 import tomato.gui.warnings.JavaOutOfMemoryGUI;
+import tomato.gui.warnings.LoadingGUI;
 import tomato.realmshark.CrashLogger;
 import tomato.version.Version;
 import util.Util;
@@ -138,6 +139,7 @@ public class Tomato {
      * the data to the controllers and link the data to the view to be displayed.
      */
     public static void load() {
+        LoadingGUI.show();
         try {
             CrashLogger.loadThisClass();
             TomatoGUI.loadThemePreset();
@@ -163,6 +165,7 @@ public class Tomato {
             e.printStackTrace();
             CrashLogger.printCrash((Exception) e);
         } finally {
+            LoadingGUI.hide();
             dispose();
         }
     }

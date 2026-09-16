@@ -62,7 +62,7 @@ public class ServerConnectionGUI extends JFrame {
         if (instance != null) return;
         instance = new ServerConnectionGUI();
         instance.setTitle("Server Info");
-        instance.setSize(560, 380);
+        instance.setSize(640, 380);
         instance.setLocation(
             frame.getX() + frame.getWidth() / 2 - instance.getWidth() / 2,
             frame.getY() + frame.getHeight() / 2 - instance.getHeight() / 2
@@ -80,7 +80,7 @@ public class ServerConnectionGUI extends JFrame {
         JScrollPane savedScroll = new JScrollPane(savedListPanel);
         savedScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
         savedScroll.getVerticalScrollBar().setUnitIncrement(16);
-        savedScroll.setPreferredSize(new Dimension(200, 0));
+        savedScroll.setPreferredSize(new Dimension(250, 0));
         savedScroll.setBorder(BorderFactory.createTitledBorder("Saved IPs"));
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, infoPanel, savedScroll);
@@ -253,6 +253,16 @@ public class ServerConnectionGUI extends JFrame {
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         JButton copyButton = new JButton("Copy");
         copyButton.addActionListener(e -> copyToClipboard(entry.ip));
+
+        JButton conButton = new JButton("/");
+        conButton.setToolTipText("Copy \"/con " + entry.ip + "\"");
+        conButton.setMargin(new Insets(1, 4, 1, 4));
+        conButton.addActionListener(e -> copyToClipboard("/con " + entry.ip));
+
+        JButton editButton = new JButton("Edit");
+        editButton.setToolTipText("Rename");
+        editButton.addActionListener(e -> editEntryName(entry));
+
         JButton deleteButton = new JButton("X");
         deleteButton.addActionListener(e -> {
             savedEntries.remove(entry);
@@ -260,10 +270,22 @@ public class ServerConnectionGUI extends JFrame {
             refreshSavedList();
         });
         buttons.add(copyButton);
+        buttons.add(conButton);
+        buttons.add(editButton);
         buttons.add(deleteButton);
         row.add(buttons, BorderLayout.EAST);
 
         return row;
+    }
+
+    private static void editEntryName(SavedEntry entry) {
+        String newName = JOptionPane.showInputDialog(savedListPanel, "Name for this saved IP:", entry.mapLabel);
+        if (newName == null) return;
+        newName = newName.trim();
+        if (newName.isEmpty()) return;
+        entry.mapLabel = newName;
+        persistSavedEntries();
+        refreshSavedList();
     }
 
     private static List<SavedEntry> loadSavedEntries() {
