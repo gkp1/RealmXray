@@ -10,6 +10,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,7 +56,6 @@ public class PacketLogGUI extends JPanel {
     // not view row index — use table.convertRowIndexToModel() when reading from a view row).
     private List<PacketLogEntry> visibleEntries = new ArrayList<>();
     private Timer pollTimer;
-    private File outputFile;
 
     public PacketLogGUI() {
         setLayout(new BorderLayout());
@@ -107,7 +107,7 @@ public class PacketLogGUI extends JPanel {
         errorsOnlyCheckbox = new JCheckBox("Only unparsed/unknown");
         pauseCheckbox = new JCheckBox("Pause");
         countLabel = new JLabel("0 entries");
-        fileLabel = new JLabel("Not saving to file");
+        fileLabel = new JLabel("Auto-logging: starting...");
 
         add(buildTopPanel(), BorderLayout.NORTH);
         tableScrollPane = new JScrollPane(table);
@@ -154,12 +154,9 @@ public class PacketLogGUI extends JPanel {
         JPanel panel = new JPanel(new BorderLayout());
 
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        JButton saveButton = new JButton("Save to file...");
-        saveButton.addActionListener(e -> chooseOutputFile());
-        JButton stopSavingButton = new JButton("Stop saving");
-        stopSavingButton.addActionListener(e -> stopSavingToFile());
+        JButton saveButton = new JButton("Save");
+        saveButton.addActionListener(e -> saveLog());
         left.add(saveButton);
-        left.add(stopSavingButton);
         left.add(fileLabel);
 
         panel.add(left, BorderLayout.WEST);
@@ -167,33 +164,32 @@ public class PacketLogGUI extends JPanel {
         return panel;
     }
 
-    private void chooseOutputFile() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File("packet-log.jsonl"));
-        int result = chooser.showSaveDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            try {
-                outputFile = chooser.getSelectedFile();
-                FullPacketLogger.INSTANCE.setOutputFile(outputFile);
-                fileLabel.setText("Saving to: " + outputFile.getAbsolutePath());
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(
-                    this,
-                    "Failed to open file for writing: " + ex.getMessage(),
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE
-                );
+    /**
+     * Packets are always being written to the current automatic log (rx-logs/automatic) in the
+     * background; this just copies that file into rx-logs/saved so it survives the automatic
+     * log's rolling retention.
+     */
+    private void saveLog() {
+        try {
+            File saved = FullPacketLogger.INSTANCE.saveCurrentLog();
+            if (saved == null) {
+                JOptionPane.showMessageDialog(this, "No automatic log to save yet.",
+                    "Packet Log", JOptionPane.INFORMATION_MESSAGE);
+                return;
             }
+            JOptionPane.showMessageDialog(this, "Saved to: " + saved.getAbsolutePath(),
+                "Packet Log", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Failed to save log: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void stopSavingToFile() {
-        try {
-            FullPacketLogger.INSTANCE.setOutputFile(null);
-            outputFile = null;
-            fileLabel.setText("Not saving to file");
-        } catch (Exception ignored) {
-        }
+    private void updateFileLabel() {
+        File current = FullPacketLogger.INSTANCE.getCurrentLogFile();
+        fileLabel.setText(current == null
+            ? "Auto-logging: starting..."
+            : "Auto-logging to: " + current.getAbsolutePath());
     }
 
     private void startPolling() {
@@ -209,6 +205,7 @@ public class PacketLogGUI extends JPanel {
     }
 
     private void refreshTable() {
+        updateFileLabel();
         if (pauseCheckbox.isSelected()) return;
 
         List<PacketLogEntry> entries = FullPacketLogger.INSTANCE.getRecent(MAX_VISIBLE_ROWS);

@@ -44,6 +44,7 @@ public class TomatoGUI {
     private static MyInfoGUI myDmg;
     private static StatisticsGUI statistics;
     private static PacketLogGUI packetLogPanel;
+    private static JButton snifferToggleButton;
     private JMenuBar jMenuBar;
     private JPanel mainPanel, dpsPanel;
     private TomatoMenuBar menuBar;
@@ -87,6 +88,8 @@ public class TomatoGUI {
         packetLogPanel = new PacketLogGUI();
         tabbedPane.addTab("Packet Log", packetLogPanel);
 
+        tabbedPane.putClientProperty("JTabbedPane.trailingComponent", buildTabBarButtons());
+
         center =
             GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
         menuBar = new TomatoMenuBar();
@@ -108,6 +111,24 @@ public class TomatoGUI {
         makeFrame();
 
         frame.setVisible(true);
+    }
+
+    /**
+     * Small panel shown to the right of the tab-switching buttons: opens the Server Info window,
+     * and toggles the sniffer without needing to go through the File menu.
+     */
+    private JPanel buildTabBarButtons() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+
+        JButton serverInfoButton = new JButton("Server Info");
+        serverInfoButton.addActionListener(e -> ServerConnectionGUI.make(getFrame()));
+        panel.add(serverInfoButton);
+
+        snifferToggleButton = new JButton("Start Sniffer");
+        snifferToggleButton.addActionListener(e -> TomatoMenuBar.toggleSniffer());
+        panel.add(snifferToggleButton);
+
+        return panel;
     }
 
     /**
@@ -266,6 +287,9 @@ public class TomatoGUI {
         statusLabel.setText(
             " Network Monitor: " + (running ? "RUNNING" : "OFF")
         );
+        if (snifferToggleButton != null) {
+            snifferToggleButton.setText(running ? "Stop Sniffer" : "Start Sniffer");
+        }
     }
 
     /**

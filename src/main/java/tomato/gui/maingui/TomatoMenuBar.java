@@ -728,15 +728,7 @@ public class TomatoMenuBar implements ActionListener {
     @Override
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == sniffer) { // Starts and stops the sniffer
-            if (sniffer.getText().contains("Start")) {
-                sniffer.setText("Stop Sniffer");
-                Tomato.startPacketSniffer();
-                TomatoGUI.setStateOfSniffer(true);
-                PropertiesManager.setProperties("sniffer", "T");
-            } else {
-                stopPacketSniffer();
-                PropertiesManager.setProperties("sniffer", "F");
-            }
+            toggleSniffer();
         } else if (e.getSource() == disableDataSending) { // disables data sharing
             boolean b = disableDataSending.isSelected();
             PropertiesManager.setProperties("disableDataSending", b ? "true" : "false");
@@ -941,5 +933,21 @@ public class TomatoMenuBar implements ActionListener {
         sniffer.setText("Start Sniffer");
         Tomato.stopPacketSniffer();
         TomatoGUI.setStateOfSniffer(false);
+    }
+
+    /**
+     * Starts or stops the sniffer depending on its current state. Shared by the "Start/Stop
+     * Sniffer" menu item and the top-bar sniffer toggle button, so both stay in sync.
+     */
+    public static void toggleSniffer() {
+        if (sniffer.getText().contains("Start")) {
+            sniffer.setText("Stop Sniffer");
+            Tomato.startPacketSniffer();
+            TomatoGUI.setStateOfSniffer(true);
+            PropertiesManager.setProperties("sniffer", "T");
+        } else {
+            stopPacketSniffer();
+            PropertiesManager.setProperties("sniffer", "F");
+        }
     }
 }

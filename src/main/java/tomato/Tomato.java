@@ -9,6 +9,7 @@ import packets.PacketType;
 import packets.incoming.MapInfoPacket;
 import packets.incoming.ip.IpAddress;
 import packets.packetcapture.PacketProcessor;
+import packets.packetcapture.logger.FullPacketLogger;
 import packets.packetcapture.register.Register;
 import packets.packetcapture.sniff.assembly.TcpStreamErrorHandler;
 import tomato.backend.TomatoPacketCapture;
@@ -323,5 +324,6 @@ public class Tomato {
         data.loadPropList("entityIdPings");
         data.loadPropList("itemPings");
         DpsFileLogger.INSTANCE.start();
+        FullPacketLogger.INSTANCE.startAutomaticLogging();
     }
 }
