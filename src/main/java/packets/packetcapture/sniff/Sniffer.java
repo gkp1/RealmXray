@@ -72,64 +72,79 @@ public class Sniffer {
             PermissionDeniedException, NoSuchDeviceException, TimestampPrecisionNotSupportedException {
 
         Service service = Service.Creator.create("PcapService");
-        Interface[] interfaceList = NativeBridge.getInterfaces(service);
-        pcaps = new Pcap[interfaceList.length];
-        realmPcap = null;
         stop = false;
 
-        DiagnosticLog.log("INTERFACES_FOUND", "count=" + interfaceList.length + " interfaces=" + Arrays.toString(interfaceList));
-        captureThreads.clear();
-        convergenceWindowStartNanos = System.nanoTime();
+        // Runs the discover -> open -> converge -> process cycle repeatedly: if
+        // processBufferedPackets() reports a prolonged silence (see SNIFFER_STALL_DETECTED),
+        // capture is torn down and re-discovered automatically instead of requiring the user
+        // to manually click Stop then Start.
+        while (!stop) {
+            Interface[] interfaceList = NativeBridge.getInterfaces(service);
+            pcaps = new Pcap[interfaceList.length];
+            realmPcap = null;
 
-        for (int i = 0; i < interfaceList.length; i++) {
-            DefaultLiveOptions defaultLiveOptions = new DefaultLiveOptions();
-            defaultLiveOptions.timeout(60000);
-            defaultLiveOptions.promiscuous(false); // only this host's own traffic is ever needed
-            Pcap pcap = null;
+            DiagnosticLog.log("INTERFACES_FOUND", "count=" + interfaceList.length + " interfaces=" + Arrays.toString(interfaceList));
+            captureThreads.clear();
+            convergenceWindowStartNanos = System.nanoTime();
+            lastPacketNanos = System.nanoTime();
+            stallLogged = false;
 
-            try {
-                /*
-                If we're running on macOS we only want to start sniffing if it is a 'valid' interface
-                That is, it is actually being used and has a valid IPv4 address
-                Otherwise it will break and not work
-                */
+            for (int i = 0; i < interfaceList.length; i++) {
+                DefaultLiveOptions defaultLiveOptions = new DefaultLiveOptions();
+                defaultLiveOptions.timeout(60000);
+                defaultLiveOptions.promiscuous(false); // only this host's own traffic is ever needed
+                Pcap pcap = null;
 
-                // Check if we're running on macOS
-                if (System.getProperty("os.name").toLowerCase().contains("mac")) {
-                    // Loop over the interfaces addresses and check if there is a valid IPv4 address
-                    for (Address addr : interfaceList[i].addresses()) {
-                        if (addr.address() instanceof Inet4Address) {
-                            Inet4Address ip = (Inet4Address) addr.address();
+                try {
+                    /*
+                    If we're running on macOS we only want to start sniffing if it is a 'valid' interface
+                    That is, it is actually being used and has a valid IPv4 address
+                    Otherwise it will break and not work
+                    */
 
-                            // If we've got an IPv4 address that isn't loopback or link local, start the sniffer
-                            if (!ip.isLoopbackAddress() && !ip.isLinkLocalAddress()) {
-                                pcap = service.live(interfaceList[i], defaultLiveOptions);
+                    // Check if we're running on macOS
+                    if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                        // Loop over the interfaces addresses and check if there is a valid IPv4 address
+                        for (Address addr : interfaceList[i].addresses()) {
+                            if (addr.address() instanceof Inet4Address) {
+                                Inet4Address ip = (Inet4Address) addr.address();
+
+                                // If we've got an IPv4 address that isn't loopback or link local, start the sniffer
+                                if (!ip.isLoopbackAddress() && !ip.isLinkLocalAddress()) {
+                                    pcap = service.live(interfaceList[i], defaultLiveOptions);
+                                }
                             }
                         }
+                    } else {
+                        pcap = service.live(interfaceList[i], defaultLiveOptions);
                     }
-                } else {
-                    pcap = service.live(interfaceList[i], defaultLiveOptions);
-                }
 
-                // If pcap is null, meaning this was not a 'valid' interface on macOS continue on to the next one
-                if (pcap == null) {
+                    // If pcap is null, meaning this was not a 'valid' interface on macOS continue on to the next one
+                    if (pcap == null) {
+                        continue;
+                    }
+
+                    pcap.setFilter("tcp port " + port, true);
+                    pcaps[i] = pcap;
+                    DiagnosticLog.log("INTERFACE_OPENED", "index=" + i + " interface=" + interfaceList[i]);
+
+                } catch (Exception e) {
+                    e.printStackTrace();
                     continue;
                 }
 
-                pcap.setFilter("tcp port " + port, true);
-                pcaps[i] = pcap;
-                DiagnosticLog.log("INTERFACE_OPENED", "index=" + i + " interface=" + interfaceList[i]);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                continue;
+                startPacketSniffer(pcap);
             }
 
-            startPacketSniffer(pcap);
-        }
+            closeUnusedSniffers();
+            if (stop) break;
 
-        closeUnusedSniffers();
-        processBufferedPackets();
+            boolean stalled = processBufferedPackets();
+            if (!stalled) break;
+
+            DiagnosticLog.log("SNIFFER_AUTO_RESTART", "restarting capture after prolonged silence");
+            closeAllPcaps();
+        }
     }
 
     /**
@@ -164,6 +179,7 @@ public class Sniffer {
                             ringBuffer.push(packet);
                         }
                         realmPcap = pcap;
+                        lastPacketNanos = System.nanoTime();
                         synchronized (thisObject) {
                             thisObject.notifyAll();
                         }
@@ -254,13 +270,36 @@ public class Sniffer {
      */
     private static final long HEARTBEAT_INTERVAL_MS = 30_000;
     private long lastHeartbeat = 0;
+    // wait() is bounded so this loop periodically re-checks how long it's been since the last
+    // captured packet - an unbounded wait() here previously meant a silent capture stall (network
+    // path change, adapter hiccup, etc.) blocked this thread forever with zero recovery and zero
+    // further log output (see SNIFFER_STALL_DETECTED / the 13-minute silence this replaces).
+    private static final long WAIT_TIMEOUT_MS = 5_000;
+    private static final long STALL_THRESHOLD_MS = 90_000; // far longer than ROTMG's normal tick cadence
+    private volatile long lastPacketNanos;
+    private boolean stallLogged;
 
-    private void processBufferedPackets() {
+    /**
+     * @return true if this returned because of a detected capture stall (caller should tear down
+     * and restart capture), false if it returned because the sniffer was stopped normally.
+     */
+    private boolean processBufferedPackets() {
         try {
             while (!stop) {
                 synchronized (thisObject) {
-                    thisObject.wait();
+                    thisObject.wait(WAIT_TIMEOUT_MS);
                 }
+                if (stop) break;
+
+                long silentMs = (System.nanoTime() - lastPacketNanos) / 1_000_000;
+                if (silentMs >= STALL_THRESHOLD_MS) {
+                    if (!stallLogged) {
+                        stallLogged = true;
+                        DiagnosticLog.log("SNIFFER_STALL_DETECTED", "silentMs=" + silentMs);
+                    }
+                    return true;
+                }
+
                 long now = System.currentTimeMillis();
                 if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
                     lastHeartbeat = now;
@@ -295,6 +334,29 @@ public class Sniffer {
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+        return false;
+    }
+
+    /**
+     * Closes any pcap handles still open, used when tearing down capture for a self-healing
+     * restart (see SNIFFER_AUTO_RESTART) as well as normal shutdown paths. Safe to call on
+     * handles already closed.
+     */
+    private void closeAllPcaps() {
+        if (realmPcap != null) {
+            try {
+                realmPcap.close();
+            } catch (Exception ignored) {}
+        }
+        if (pcaps != null) {
+            for (Pcap pcap : pcaps) {
+                if (pcap != null && pcap != realmPcap) {
+                    try {
+                        pcap.close();
+                    } catch (Exception ignored) {}
+                }
+            }
         }
     }
 
@@ -367,6 +429,13 @@ public class Sniffer {
                 // Network tap is already closed
                 System.out.println("[X] Error stopping sniffer: sniffer not running.");
             }
+        }
+        // Without this, a thread already blocked in processBufferedPackets()'s or
+        // closeUnusedSniffers()'s wait() would never wake up on manual Stop - it'd leak as a
+        // permanently-blocked thread instead of exiting cleanly (stop is only checked after wait()
+        // returns).
+        synchronized (thisObject) {
+            thisObject.notifyAll();
         }
     }
 }
